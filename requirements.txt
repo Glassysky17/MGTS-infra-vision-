@@ -1,0 +1,17 @@
+numpy
+opencv-python-headless
+pillow
+pyyaml
+pandas
+scipy
+scikit-learn
+tqdm
+torch
+torchvision
+ultralytics
+albumentations
+streamlit
+folium
+streamlit-folium
+gpxpy
+pytest

@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mgts-infra-vision"
+version = "0.1.0"
+description = "Мониторинг городской инфраструктуры МГТС по снимкам с камер служебных автомобилей"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "opencv-python-headless",
+    "pillow",
+    "pyyaml",
+    "pandas",
+    "scipy",
+    "scikit-learn",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+ml = ["torch", "torchvision", "ultralytics", "albumentations"]
+app = ["streamlit", "folium", "streamlit-folium", "gpxpy"]
+dev = ["pytest"]
+
+[project.scripts]
+mgts = "mgts.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q -rs"

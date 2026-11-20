@@ -1,0 +1,80 @@
+# Единый конфиг. Каждый агент правит ТОЛЬКО свою секцию (см. AGENTS.md).
+# Секции: dataset, preprocessing, detection -> Агент 1/2 | condition -> Агент 3 | geo, export, pipeline -> Агент 4
+
+paths:
+  raw_dir: data/raw
+  processed_dir: data/processed     # YOLO-датасет (images/ labels/ data.yaml)
+  crops_dir: data/crops             # вырезки объектов для классификатора состояния
+  models_dir: models
+  outputs_dir: outputs
+  classes_file: configs/classes.yaml
+
+dataset:                            # Агент 1
+  val_fraction: 0.2
+  seed: 42
+  group_by: sequence                # регэксп/правило группировки кадров одной серии, чтобы не было утечки train->val
+  crop_padding: 0.15                # поля вокруг bbox при вырезке
+
+preprocessing:                      # Агент 2
+  blur_threshold: 80.0              # дисперсия лапласиана; ниже = кадр размыт (подобрать на данных)
+  enhance:
+    clahe: true
+    clahe_clip: 2.0
+    clahe_grid: 8
+    gamma: auto                     # auto | число | null
+    denoise: false
+
+detection:                          # Агент 2
+  backend: yolo                     # yolo | dummy (dummy читает GT-разметку рядом с картинкой, для интеграции)
+  base_model: yolov8s.pt
+  weights: models/detector.pt
+  imgsz: 960
+  conf: 0.25
+  iou: 0.5
+  epochs: 50
+  batch: 16
+  device: auto                      # auto | cpu | 0
+  tiling:
+    enabled: true
+    tile_size: 640
+    overlap: 0.2
+    min_image_side: 1280            # тайлим только если картинка больше
+
+condition:                          # Агент 3
+  classifier:
+    enabled: true
+    backbone: efficientnet_b0       # efficientnet_b0 | resnet18 | features_lr (fallback без GPU)
+    input_size: 224
+    weights: models/condition_clf.pt
+  geometry:
+    tilt_warn_deg: 4.0
+    tilt_defect_deg: 8.0
+    hatch_circularity_min: 0.85     # ниже -> подозрение на деформацию/смещение люка
+    crack_score_defect: 0.55
+    corrosion_ratio_defect: 0.25
+  scoring:
+    defect_threshold: 0.6           # score >= -> severity=defect
+    warning_threshold: 0.35         # score >= -> warning
+    uncertain_band: 0.1             # |score - threshold| < band -> needs_review
+    min_det_score: 0.3              # слабая детекция -> needs_review
+
+geo:                                # Агент 4
+  camera:
+    height_m: 1.4                   # высота камеры над землёй
+    pitch_deg: 5.0                  # наклон вниз
+    hfov_deg: 90.0
+    mount_offset_m: [0.0, 0.0]      # смещение камеры от GPS-антенны (вперёд, вправо)
+  dedup:
+    radius_m: 6.0                   # объекты одного класса ближе -> кандидаты в один
+    use_appearance: true            # доп. проверка по гистограмме HSV
+    appearance_min_sim: 0.5
+  fallback_no_gps: synthetic        # synthetic (псевдо-трек по номеру кадра) | none
+
+export:                             # Агент 4
+  formats: [csv, geojson, html]
+  save_annotated_frames: true
+  save_crops: true
+
+pipeline:                           # Агент 4
+  max_frames: null
+  skip_blurry: true
