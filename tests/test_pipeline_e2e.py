@@ -116,6 +116,10 @@ def test_pipeline_continues_after_bad_frame_and_writes_artifacts(tmp_path, cfg, 
     summary = json.loads((tmp_path / "out" / "summary.json").read_text(encoding="utf-8"))
     assert len(records) == 1
     assert summary["n_errors"] == 1 and summary["n_detections"] == 1
+    assert len(summary["frame_errors"]) == 1
+    assert summary["frame_errors"][0]["frame_id"] == "broken"
+    assert summary["frame_errors"][0]["type"]
+    assert str(input_dir / "broken.jpg") in summary["frame_errors"][0]["message"]
     assert len(progress) == 2
     assert (tmp_path / "out" / "objects.csv").is_file()
     assert (tmp_path / "out" / "objects.geojson").is_file()

@@ -7,7 +7,6 @@ import statistics
 import cv2
 
 from ..condition.scoring import priority_for
-from ..config import class_info
 from ..schemas import ConditionAssessment, ObjectRecord, Observation, Priority, Severity
 from ..utils import haversine_m
 
@@ -34,26 +33,6 @@ def _adjacent(first: str, second: str) -> bool:
     """Проверить соседство нумерованных идентификаторов кадров."""
     numbers = [re.search(r"(\d+)$", value) for value in (first, second)]
     return bool(numbers[0] and numbers[1] and abs(int(numbers[0].group(1)) - int(numbers[1].group(1))) == 1)
-
-
-def _fallback_priority(class_name: str, assessment: ConditionAssessment, classes: dict | None) -> Priority:
-    """Приоритет для интеграционного запуска до готовности scoring-модуля."""
-    if assessment.severity == Severity.OK and not assessment.needs_review:
-        return Priority.LOW
-    try:
-        criticality = float(class_info(class_name, classes).get("criticality", 1.0))
-    except KeyError:
-        criticality = 1.0
-    weighted = criticality * assessment.score
-    if any(finding.code in ("cover_missing", "cable_sag") for finding in assessment.findings):
-        weighted += 0.15
-    if weighted >= 0.75:
-        return Priority.CRITICAL
-    if weighted >= 0.5:
-        return Priority.HIGH
-    if weighted >= 0.25 or assessment.needs_review:
-        return Priority.MEDIUM
-    return Priority.LOW
 
 
 def merge_observations(  # CONTRACT
@@ -136,10 +115,7 @@ def merge_observations(  # CONTRACT
         scores = [item.assessment.score for item in cluster]
         condition_score = max(scores, default=0.0)
         assessment = ConditionAssessment(severity, condition_score, findings, needs_review)
-        try:
-            priority = priority_for(best.detection.class_name, assessment, cfg, classes)
-        except NotImplementedError:
-            priority = _fallback_priority(best.detection.class_name, assessment, classes)
+        priority = priority_for(best.detection.class_name, assessment, cfg, classes)
         records.append(ObjectRecord(
             object_id="", class_name=best.detection.class_name, severity=severity,
             condition_score=condition_score, needs_review=needs_review, priority=priority,

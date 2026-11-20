@@ -71,7 +71,7 @@ def to_html_map(records: list[ObjectRecord], path: str | Path, title: str = "М�
     """Автономный HTML (folium): маркеры по приоритету (critical красный, high оранжевый, medium жёлтый, low зелёный),
     всплывающее окно: тип, состояние, дефекты (description), уверенность, миниатюра кропа (base64, <= 160 px),
     метка «⚠ ручная проверка» при needs_review; легенда; фильтр слоёв по priority.
-    Если нет ни одной координаты — карта-заглушка с таблицей объектов. Если folium не установлен — простая HTML-таблица."""
+    Если нет ни одной координаты или folium не установлен — упрощённая HTML-таблица объектов."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     located = [record for record in records if record.lat is not None and record.lon is not None]

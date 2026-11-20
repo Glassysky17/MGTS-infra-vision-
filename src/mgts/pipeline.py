@@ -7,11 +7,9 @@ import time
 from pathlib import Path
 from typing import Callable, Optional
 
-import numpy as np
-
 from .condition.classifier import DefectClassifier
 from .condition.scoring import assess
-from .config import class_names, load_classes, resolve_path
+from .config import load_classes, resolve_path
 from .detection.infer import build_detector
 from .export import draw_annotated, to_csv, to_geojson, to_html_map
 from .geo.dedup import merge_observations
@@ -20,42 +18,10 @@ from .geo.project import estimate_object_position
 from .observability import current_run_id, log_context, new_run_id, trace_span
 from .preprocessing.enhance import enhance
 from .preprocessing.quality import blur_score
-from .schemas import BBox, ConditionAssessment, Detection, Observation, ObjectRecord, Severity
+from .schemas import Observation, ObjectRecord, Severity
 from .utils import list_images, read_image, write_image
 
 logger = logging.getLogger(__name__)
-
-
-class _LabelFileDetector:
-    """Минимальный DummyDetector для интеграции, пока модуль A2 остаётся заглушкой."""
-
-    def __init__(self, names: list[str]) -> None:
-        """Сохранить порядок имён классов для YOLO label-файлов."""
-        self.names = names
-
-    def detect(self, image: np.ndarray, frame_id: str, image_path: str | None = None) -> list[Detection]:
-        """Прочитать соседний label-файл и вернуть рамки в пикселях."""
-        if image_path is None:
-            return []
-        label_path = Path(image_path).parents[1] / "labels" / f"{Path(image_path).stem}.txt"
-        if not label_path.is_file():
-            return []
-        height, width = image.shape[:2]
-        results = []
-        with label_path.open(encoding="utf-8") as file:
-            for line in file:
-                parts = line.split()
-                if len(parts) != 5:
-                    continue
-                try:
-                    class_id = int(parts[0])
-                    xc, yc, box_w, box_h = map(float, parts[1:])
-                    name = self.names[class_id]
-                except (ValueError, IndexError):
-                    continue
-                results.append(Detection(frame_id, class_id, name, 0.9,
-                                         BBox.from_xywhn(xc, yc, box_w, box_h, width, height).clip(width, height)))
-        return results
 
 
 def run_pipeline(  # CONTRACT
@@ -101,14 +67,7 @@ def _run_pipeline(
                     frames=len(images), track_path=str(track_path) if track_path else None):
         classes_path = cfg.get("paths", {}).get("classes_file")
         classes = load_classes(resolve_path(classes_path) if classes_path else None)
-        names = class_names(classes)
-        try:
-            detector = build_detector(cfg)
-        except NotImplementedError:
-            if cfg.get("detection", {}).get("backend") != "dummy":
-                raise
-            logger.warning("DummyDetector из A2 пока не реализован; использую чтение YOLO labels напрямую")
-            detector = _LabelFileDetector(names)
+        detector = build_detector(cfg)
         classifier = DefectClassifier(cfg, classes) if cfg.get("condition", {}).get("classifier", {}).get("enabled", False) else None
         track = None
         if track_path:
@@ -119,6 +78,7 @@ def _run_pipeline(
 
     observations: list[Observation] = []
     n_skipped_blurry = n_errors = n_detections = 0
+    frame_errors: list[dict[str, str]] = []
     progress_interval = max(1, (len(images) + 19) // 20)
     for index, image_path in enumerate(images):
         frame_id = image_path.stem
@@ -147,11 +107,7 @@ def _run_pipeline(
                         with trace_span(logger, "detection.assessment", level=logging.DEBUG, log_traceback=False,
                                         timings=stage_seconds, timing_key="assessment", detection_index=detection_index,
                                         class_name=detection.class_name, confidence=detection.score):
-                            try:
-                                assessment = assess(image, detection, cfg, classifier, classes)
-                            except NotImplementedError:
-                                logger.warning("condition.assess пока не реализован; сохраняю детекцию без оценки")
-                                assessment = ConditionAssessment(Severity.OK, 0.0)
+                            assessment = assess(image, detection, cfg, classifier, classes)
                         with trace_span(logger, "detection.geolocation", level=logging.DEBUG, log_traceback=False,
                                         timings=stage_seconds, timing_key="geolocation", detection_index=detection_index):
                             lat, lon, location_source = estimate_object_position(meta, detection.bbox, cfg)
@@ -172,8 +128,11 @@ def _run_pipeline(
                         with trace_span(logger, "frame.annotated_export", level=logging.DEBUG, log_traceback=False):
                             write_image(output_dir / "annotated" / f"{frame_id}.jpg",
                                         draw_annotated(image, annotated_items))
-            except Exception:
+            except Exception as exc:
                 n_errors += 1
+                frame_errors.append({"frame_id": frame_id, "type": type(exc).__name__, "message": str(exc)})
+                logger.error("frame.failed type=%s error=%s", type(exc).__name__, exc,
+                             extra={"stage": "frame.failed"})
             finally:
                 if progress:
                     progress(index + 1, len(images), frame_id)
@@ -197,6 +156,7 @@ def _run_pipeline(
     summary = {
         "n_frames": len(images), "n_processed": len(images) - n_skipped_blurry - n_errors,
         "n_skipped_blurry": n_skipped_blurry, "n_errors": n_errors, "n_detections": n_detections,
+        "frame_errors": frame_errors,
         "n_objects": len(records),
         "severity": {severity.value: sum(record.severity == severity for record in records) for severity in Severity},
         "priority": {priority: sum(record.priority.value == priority for record in records) for priority in ("critical", "high", "medium", "low")},

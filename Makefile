@@ -1,18 +1,16 @@
-.PHONY: install test red green demo-data e2e app lint
+.PHONY: install install-dev test green demo-data e2e app lint
 
 install:
-	pip install -r requirements.txt && pip install -e .
+	uv sync --locked --all-extras
+
+# Базовые зависимости для CLI, демо и тестов; без PyTorch, YOLO и Streamlit.
+install-dev:
+	uv sync --locked --extra dev
 
 test:
 	pytest
 
-# TDD: заглушки считаются красными
-red:
-	MGTS_STRICT=1 pytest -x
-
-# приёмка: всё должно быть зелёным без пропусков
-green:
-	MGTS_STRICT=1 pytest
+green: test
 
 # Синтетический мини-датасет с псевдо-GPS (для отладки без реальных данных)
 demo-data:

@@ -1,17 +1,3 @@
-numpy
-opencv-python-headless
-pillow
-pyyaml
-pandas
-scipy
-scikit-learn
-tqdm
-torch
-torchvision
-ultralytics
-albumentations
-streamlit
-folium
-streamlit-folium
-gpxpy
-pytest
+# For locked installs use `make install` or `make install-dev` (reads uv.lock).
+# Legacy pip convenience only; pip does not apply uv.lock.
+-e .[ml,app,dev]

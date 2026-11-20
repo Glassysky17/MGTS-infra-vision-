@@ -29,6 +29,7 @@ class DefectClassifier:  # CONTRACT
         (мультиметка: BCEWithLogits); дообучение: сначала только голова (2–3 эпохи), затем всё с lr/10;
       - 'features_lr': FALLBACK без GPU — признаки (гистограммы HSV, LBP/края, выход geometry.*) +
         LogisticRegression/GradientBoosting из scikit-learn.
+    Файл весов pickle должен быть доверенным: его загрузка может выполнять произвольный код.
     Если весов нет — predict() возвращает {} (а scoring использует только геометрию), без исключений.
     """
 

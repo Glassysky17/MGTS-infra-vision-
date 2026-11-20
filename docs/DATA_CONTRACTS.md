@@ -37,7 +37,7 @@ images/*.jpg   labels/*.txt   data.yaml   train.txt   val.txt
 | `map.html` | автономная карта (folium) |
 | `annotated/*.jpg` | кадры с рамками (цвет по severity) |
 | `crops/*.jpg` | вырезки лучших наблюдений |
-| `summary.json` | счётчики и время по этапам |
+| `summary.json` | счётчики и время по этапам, `frame_errors` с id кадра, типом и сообщением исключения |
 
 ## Значения
 
@@ -47,5 +47,4 @@ images/*.jpg   labels/*.txt   data.yaml   train.txt   val.txt
 - В GeoJSON порядок `[lon, lat]`, в CSV — отдельные колонки `lat`, `lon`.
 
 ## Как менять контракт
-Строка в `tasks/CONTRACT_REQUESTS.md`: `кто | что | зачем`. Агент 4 решает и вносит изменение одним коммитом
-вместе с обновлением `schemas.py`, тестов и этого файла.
+При изменении публичной схемы обновить `src/mgts/schemas.py`, тесты и этот файл в одном изменении.
