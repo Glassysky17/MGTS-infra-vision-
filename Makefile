@@ -20,7 +20,7 @@ demo-data:
 
 # Сквозной прогон: картинки -> перечень объектов -> CSV/GeoJSON/карта
 e2e:
-	mgts run --input data/demo/images --output outputs/e2e --track data/demo/frames.csv
+	python -m mgts.cli run --input data/demo/images --output outputs/e2e --track data/demo/frames.csv --backend dummy
 
 app:
 	streamlit run app/streamlit_app.py
