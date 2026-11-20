@@ -14,6 +14,14 @@ dataset:                            # Агент 1
   seed: 42
   group_by: sequence                # регэксп/правило группировки кадров одной серии, чтобы не было утечки train->val
   crop_padding: 0.15                # поля вокруг bbox при вырезке
+  augment:
+    motion_blur: 0.10
+    rain: 0.10
+    glare: 0.10
+    shadow: 0.10
+    night: 0.10
+    perspective_warp: 0.20
+  perspective_max_shift: 0.08
 
 preprocessing:                      # Агент 2
   blur_threshold: 80.0              # дисперсия лапласиана; ниже = кадр размыт (подобрать на данных)
@@ -22,11 +30,13 @@ preprocessing:                      # Агент 2
     clahe_clip: 2.0
     clahe_grid: 8
     gamma: auto                     # auto | число | null
+    gamma_target_mean: 110.0
     denoise: false
+    denoise_strength: 5
 
 detection:                          # Агент 2
   backend: yolo                     # yolo | dummy (dummy читает GT-разметку рядом с картинкой, для интеграции)
-  base_model: yolov8s.pt
+  base_model: models/yolov8s.pt
   weights: models/detector.pt
   imgsz: 960
   conf: 0.25
@@ -34,6 +44,11 @@ detection:                          # Агент 2
   epochs: 50
   batch: 16
   device: auto                      # auto | cpu | 0
+  patience: 15
+  seed: 42
+  fliplr: 0.5
+  rare_class_threshold: 0.05         # класс считается редким, если доля объектов ниже 5%
+  rare_class_max_repeats: 5          # максимум дополнительных копий кадра в train.txt
   tiling:
     enabled: true
     tile_size: 640
@@ -43,32 +58,45 @@ detection:                          # Агент 2
 condition:                          # Агент 3
   classifier:
     enabled: true
-    backbone: efficientnet_b0       # efficientnet_b0 | resnet18 | features_lr (fallback без GPU)
+    backbone: features_lr           # features_lr (CPU fallback) | efficientnet_b0 | resnet18
     input_size: 224
-    weights: models/condition_clf.pt
+    weights: models/condition_clf.pkl
+    probability_threshold: 0.5
   geometry:
     tilt_warn_deg: 4.0
     tilt_defect_deg: 8.0
     hatch_circularity_min: 0.85     # ниже -> подозрение на деформацию/смещение люка
+    hatch_dark_gap_warn: 0.5
+    crack_score_warn: 0.25
     crack_score_defect: 0.55
+    corrosion_ratio_warn: 0.1
     corrosion_ratio_defect: 0.25
+    subsidence_warn: 0.3
+    subsidence_defect: 0.6
   scoring:
     defect_threshold: 0.6           # score >= -> severity=defect
     warning_threshold: 0.35         # score >= -> warning
     uncertain_band: 0.1             # |score - threshold| < band -> needs_review
     min_det_score: 0.3              # слабая детекция -> needs_review
+    min_geometry_confidence: 0.3
+    priority_critical: 0.75
+    priority_high: 0.5
+    priority_medium: 0.25
+    safety_bonus: 0.15
 
 geo:                                # Агент 4
   camera:
     height_m: 1.4                   # высота камеры над землёй
     pitch_deg: 5.0                  # наклон вниз
     hfov_deg: 90.0
+    max_distance_m: 60.0             # дальняя граница надёжной проекции на землю
     mount_offset_m: [0.0, 0.0]      # смещение камеры от GPS-антенны (вперёд, вправо)
   dedup:
     radius_m: 6.0                   # объекты одного класса ближе -> кандидаты в один
     use_appearance: true            # доп. проверка по гистограмме HSV
     appearance_min_sim: 0.5
-  fallback_no_gps: synthetic        # synthetic (псевдо-трек по номеру кадра) | none
+    missing_coord_iou_threshold: 0.3 # IoU рамок соседних кадров без координат
+  fallback_no_gps: none             # none (место неизвестно) | synthetic (только для демонстрации)
 
 export:                             # Агент 4
   formats: [csv, geojson, html]
